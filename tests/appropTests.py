@@ -9,6 +9,7 @@ from sqlalchemy.exc import InvalidRequestError
 import json
 from jobTests import JobTests
 from dataactvalidator.filestreaming.schemaLoader import SchemaLoader
+from dataactvalidator.scripts.tasSetup import loadTAS
 
 class AppropTests(unittest.TestCase):
 
@@ -70,6 +71,7 @@ class AppropTests(unittest.TestCase):
 
             # Load fields and rules
             import dataactvalidator.scripts.loadApprop
+            loadTAS("all_tas_betc.csv")
 
             # Remove existing tables from staging if they exist
             for jobId in self.jobIdDict.values():

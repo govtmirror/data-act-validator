@@ -18,5 +18,5 @@ ADD s3bucket.json /usr/local/lib/python2.7/dist-packages/dataactcore/aws/s3bucke
 ADD dbCred.json /usr/local/lib/python2.7/dist-packages/dataactcore/credentials/dbCred.json
 ADD validator_configuration.json /usr/local/lib/python2.7/dist-packages/dataactvalidator/validator_configuration.json
 
-CMD /bin/sh
+CMD validator -resetDB -start
     

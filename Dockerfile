@@ -14,5 +14,9 @@ WORKDIR /data-act
 
 RUN pip install --process-dependency-links .
 
-CMD bin/sh
+ADD s3bucket.json /usr/local/lib/python2.7/dist-packages/dataactcore/aws/s3bucket.json
+ADD dbCred.json /usr/local/lib/python2.7/dist-packages/dataactcore/credentials/dbCred.json
+ADD validator_configuration.json /usr/local/lib/python2.7/dist-packages/dataactvalidator/validator_configuration.json
+
+CMD /bin/sh
     

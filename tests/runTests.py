@@ -4,7 +4,8 @@ from validatorTests import ValidatorTests
 from appropTests import AppropTests
 import cProfile
 import pstats
-
+import sys
+import os
 def runTests():
     runMany = False # True to run the test suite multiple times
 
@@ -59,7 +60,12 @@ def runTests():
 
 
 if __name__ == '__main__':
-    #runTests()
-    cProfile.run("runTests()","stats")
-    stats = pstats.Stats("stats")
-    stats.sort_stats("cumulative").print_stats(100)
+    if(len(sys.argv) == 2) :
+        JobTests.BASE_URL = sys.argv[1] + ":8080"
+    url = os.getenv('VALIDATOR_NAME', "NOT SET")
+    if(url != "NOT SET") :
+        JobTests.BASE_URL = url
+    runTests()
+    #cProfile.run("runTests()","stats")
+    #stats = pstats.Stats("stats")
+    #stats.sort_stats("cumulative").print_stats(100)

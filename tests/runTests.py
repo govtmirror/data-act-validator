@@ -64,7 +64,7 @@ if __name__ == '__main__':
         JobTests.BASE_URL = sys.argv[1] + ":8080"
     url = os.getenv('VALIDATOR_NAME', "NOT SET")
     if(url != "NOT SET") :
-        JobTests.BASE_URL = url
+        JobTests.BASE_URL = "http://validator"
     runTests()
     #cProfile.run("runTests()","stats")
     #stats = pstats.Stats("stats")

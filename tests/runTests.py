@@ -6,9 +6,13 @@ import cProfile
 import pstats
 import sys
 import os
+import xmlrunner
 def runTests():
     runMany = False # True to run the test suite multiple times
 
+    # Setting output path for unittest junit style results
+    unittest.main(testRunner=xmlrunner.XMLTestRunner(output='test-reports'))
+    
     # Create test suite
     suite = unittest.TestSuite()
 

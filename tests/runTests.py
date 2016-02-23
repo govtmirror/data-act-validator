@@ -1,7 +1,9 @@
 import unittest, inspect
+from dataactcore.models.baseInterface import BaseInterface
+from dataactvalidator.interfaces.interfaceHolder import InterfaceHolder
 from jobTests import JobTests
 from validatorTests import ValidatorTests
-from appropTests import AppropTests
+from fileTypeTests import FileTypeTests
 import cProfile
 import pstats
 import sys
@@ -13,27 +15,30 @@ def runTests():
     # Setting output path for unittest junit style results
     unittest.main(testRunner=xmlrunner.XMLTestRunner(output='test-reports'))
     
+    # Connect to databases
+    BaseInterface.IS_FLASK = False # Tests are not running within a flask app
+    interfaces = InterfaceHolder()
+
     # Create test suite
     suite = unittest.TestSuite()
 
     # Get lists of method names
-
-    validatorMethods = inspect.getmembers(ValidatorTests, predicate=inspect.ismethod)
-    jobMethods = inspect.getmembers(JobTests, predicate=inspect.ismethod)
+    validatorMethods = ValidatorTests.__dict__.keys()
+    jobMethods = JobTests.__dict__.keys()
 
     #validatorMethods = []
-    #jobMethods = [] #[["test_valid_job"]]
+    #jobMethods = ["test_rules"]
 
     for method in validatorMethods:
         # If test method, add to suite
-        if(method[0][0:4] == "test"):
-            test =ValidatorTests(methodName=method[0])
+        if(str(method[0:4]) == "test"):
+            test =ValidatorTests(methodName=method)
             suite.addTest(test)
 
     for method in jobMethods:
         # If test method, add to suite
-        if(method[0][0:4] == "test"):
-            test =JobTests(methodName=method[0])
+        if(method[0:4] == "test"):
+            test =JobTests(methodName=method,interfaces=interfaces)
             suite.addTest(test)
 
 
@@ -50,20 +55,21 @@ def runTests():
     else:
         result = runner.run(suite)
 
-    appropSuite = unittest.TestSuite()
-    appropMethods = inspect.getmembers(AppropTests, predicate=inspect.ismethod)
-    #appropMethods = [["test_tas_mixed"]]
+    fileSuite = unittest.TestSuite()
+    fileMethods = FileTypeTests.__dict__.keys()
+    #fileMethods = []
 
-    for method in appropMethods:
+    for method in fileMethods:
         # If test method, add to suite
-        if(method[0][0:4] == "test"):
-            test =AppropTests(methodName=method[0])
-            appropSuite.addTest(test)
+        if(method[0:4] == "test"):
+            test =FileTypeTests(methodName=method,interfaces=interfaces)
+            fileSuite.addTest(test)
 
-    appropResult = runner.run(appropSuite)
-
+    fileResult = runner.run(fileSuite)
+    interfaces.close()
 
 if __name__ == '__main__':
+
     if(len(sys.argv) == 2) :
         JobTests.BASE_URL = sys.argv[1] + ":8080"
     url = os.getenv('VALIDATOR_NAME', "NOT SET")

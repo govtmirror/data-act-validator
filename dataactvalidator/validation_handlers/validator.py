@@ -1,9 +1,9 @@
 import re
-from dataactvalidator.validation_handlers.validationError import ValidationError
-from dataactvalidator.interfaces.interfaceHolder import InterfaceHolder
 from dataactcore.models.validationModels import TASLookup
 from dataactcore.utils.responseException import ResponseException
 from dataactcore.utils.statusCode import StatusCode
+from dataactvalidator.validation_handlers.validationError import ValidationError
+from dataactvalidator.interfaces.interfaceHolder import InterfaceHolder
 
 class Validator(object):
     """
@@ -14,16 +14,18 @@ class Validator(object):
     FIELD_LENGTH = {"allocationtransferrecipientagencyid":3, "appropriationaccountresponsibleagencyid":3, "obligationavailabilityperiodstartfiscalyear":4, "obligationavailabilityperiodendfiscalyear":4,"appropriationmainaccountcode":4, "appropriationsubaccountcode":3, "obligationunlimitedavailabilityperiodindicator":1}
 
     @staticmethod
-    def validate(record,rules,csvSchema,fileType):
+    def validate(record,rules,csvSchema,fileType,interfaces):
         """
         Args:
         record -- dict represenation of a single record of data
         rules -- list of rule Objects
         csvSchema -- dict of schema for the current file.
+        fileType -- name of file type to check against
+
         Returns:
         True if validation passed, False if failed, and list of failed rules, each with field, description of failure, and value that failed
         """
-
+        #print(str(record))
         recordFailed = False
         failedRules = []
         for fieldName in csvSchema :
@@ -31,16 +33,18 @@ class Validator(object):
                 return False, [[fieldName, ValidationError.requiredError, ""]]
 
         for fieldName in record :
-
             currentSchema =  csvSchema[fieldName]
-            ruleSubset = Validator.getRules(fieldName,rules)
-            currentData = record[fieldName].strip()
+            ruleSubset = Validator.getRules(fieldName, fileType, rules)
+            currentData = record[fieldName]
+            if(currentData != None):
+                currentData = currentData.strip()
 
-
-            if(len(currentData) == 0):
+            if(currentData == None or len(currentData) == 0):
                 if(currentSchema.required ):
                     # If empty and required return field name and error
-                    return False, [[fieldName, ValidationError.requiredError, ""]]
+                    recordFailed = True
+                    failedRules.append([fieldName, ValidationError.requiredError, ""])
+                    continue
                 else:
                     #if field is empty and not required its valid
                     continue
@@ -66,24 +70,24 @@ class Validator(object):
             for currentRule in ruleSubset :
                 if(not Validator.evaluateRule(currentData,currentRule,currentSchema.field_type.name)):
                     recordFailed = True
-                    failedRules.append([fieldName, "Failed rule: " + str(currentRule.description), currentData])
+                    failedRules.append([fieldName,"".join(["Failed rule: ",str(currentRule.description)]), currentData])
         # Check all multi field rules for this file type
-        validationDb = InterfaceHolder.VALIDATION
-        multiFieldRules = validationDb.getMultiFieldRulesByFile(fileType)
+        multiFieldRules = interfaces.validationDb.getMultiFieldRulesByFile(fileType)
         for rule in multiFieldRules:
-            if not Validator.evaluateMultiFieldRule(rule,record):
+            if not Validator.evaluateMultiFieldRule(rule,record,interfaces):
                 recordFailed = True
-                failedRules.append(["MultiField", "Failed rule: " + str(rule.description), Validator.getMultiValues(rule,record)])
+                failedRules.append(["MultiField", "".join(["Failed rule: ",str(rule.description)]), Validator.getMultiValues(rule,record)])
 
 
         return (not recordFailed), failedRules
 
     @staticmethod
-    def getRules(fieldName,rules) :
+    def getRules(fieldName, fileType,rules) :
         """ From a given set of rules, create a list of only the rules that apply to specified field
 
         Args:
             fieldName: Field to find rules for
+            fileType: Name of file to check against
             rules: Original set of rules
 
         Returns:
@@ -91,7 +95,7 @@ class Validator(object):
         """
         returnList =[]
         for rule in rules :
-            if( rule.file_column.name == fieldName) :
+            if(rule.file_column.name == fieldName and rule.file_column.file.name == fileType) :
                 returnList.append(rule)
         return returnList
 
@@ -118,7 +122,9 @@ class Validator(object):
             if (Validator.IS_DECIMAL.match(data) is None ) :
                 return Validator.IS_INTERGER.match(data) is not None
             return True
-        raise ValueError("Data Type Error, Type: " + datatype + ", Value: " + data)
+        if(datatype == "LONG"):
+            return Validator.IS_INTERGER.match(data) is not None
+        raise ValueError("".join(["Data Type Error, Type: ",datatype,", Value: ",data]))
 
     @staticmethod
     def getIntFromString(data) :
@@ -142,6 +148,8 @@ class Validator(object):
             return float(data)
         if(datatype == "STRING" or datatype =="BOOLEAN") :
             return data
+        if(datatype == "LONG"):
+            return long(data)
         raise ValueError("Data Type Invalid")
 
     @staticmethod
@@ -179,7 +187,7 @@ class Validator(object):
         raise ValueError("Rule Type Invalid")
 
     @staticmethod
-    def evaluateMultiFieldRule(rule, record):
+    def evaluateMultiFieldRule(rule, record, interfaces):
         """ Check a rule involving more than one field of a record
 
         Args:
@@ -196,7 +204,7 @@ class Validator(object):
             tasFields = Validator.cleanSplit(rule.rule_text_2)
             if(len(fieldsToCheck) != len(tasFields)):
                 raise ResponseException("Number of fields to check does not match number of fields checked against",StatusCode.CLIENT_ERROR,ValueError)
-            return Validator.validateTAS(fieldsToCheck, tasFields, record)
+            return Validator.validateTAS(fieldsToCheck, tasFields, record, interfaces)
         else:
             raise ResponseException("Bad rule type for multi-field rule",StatusCode.INTERNAL_ERROR)
 
@@ -222,11 +230,15 @@ class Validator(object):
         fields = Validator.cleanSplit(rule.rule_text_1)
         output = ""
         for field in fields:
-            output += field + ": " + record[field] + ", "
+            value = record[field]
+            if(value == None):
+                # For concatenating fields, represent None with an empty string
+                value = ""
+            output = "".join([output,field,": ",value,", "])
         return output[0:len(output)-2]
 
     @staticmethod
-    def validateTAS(fieldsToCheck, tasFields, record):
+    def validateTAS(fieldsToCheck, tasFields, record, interfaces):
         """ Check for presence of TAS for specified record in TASLookup table
 
         Args:
@@ -237,12 +249,14 @@ class Validator(object):
         Returns:
             True if TAS is in CARS, False otherwise
         """
-        validationDB = InterfaceHolder.VALIDATION
-        query = validationDB.session.query(TASLookup)
+        query = interfaces.validationDb.session.query(TASLookup)
         queryResult = query.all()
 
         for i in range(0,len(fieldsToCheck)):
             data = record[str(fieldsToCheck[i])]
+            if(data == None):
+                # Set data to empty string so it can be padded with leading zeros
+                data = ""
             field = fieldsToCheck[i].lower()
             # Pad field with leading zeros
             if field in Validator.FIELD_LENGTH:
@@ -251,8 +265,8 @@ class Validator(object):
                     numZeros = length - len(data)
                     zeroString = ""
                     for j in range(0,numZeros):
-                        zeroString += "0"
-                    data = zeroString + data
+                        zeroString = "".join([zeroString,"0"])
+                    data = "".join([zeroString,data])
             query = query.filter(TASLookup.__dict__[tasFields[i]] == data)
 
         queryResult = query.all()

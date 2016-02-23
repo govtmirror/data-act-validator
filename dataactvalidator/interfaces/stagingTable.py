@@ -1,18 +1,20 @@
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import MetaData, Column, Integer, Text, Numeric, Boolean
+from sqlalchemy import Column, Integer, Text, Numeric, Boolean, BigInteger
 from dataactvalidator.interfaces.interfaceHolder import InterfaceHolder
+from dataactvalidator.filestreaming.fieldCleaner import FieldCleaner
 
 class StagingTable(object):
     """ Represents a staging table used for a single job """
 
-    BATCH_INSERT = True
-    INSERT_BY_ORM = False
+    BATCH_INSERT = False
+    INSERT_BY_ORM = True
     BATCH_SIZE = 100
 
-    def __init__(self):
+    def __init__(self,interfaces):
         # Start first batch
         self.batch = []
-        self.interface = InterfaceHolder.STAGING
+        self.interface = interfaces.stagingDb
+        self.interfaces = interfaces
 
     def createTable(self, fileType, filename, jobId, tableName=None):
         """ Create staging table for new file
@@ -23,7 +25,7 @@ class StagingTable(object):
         tableName if created, exception otherwise
         """
         if(tableName == None):
-            tableName = "job"+str(jobId)
+            tableName = "".join(["job",str(jobId)])
         self.name = tableName
 
         if(self.interface.tableExists(tableName)):
@@ -34,10 +36,8 @@ class StagingTable(object):
         #tableName = "data" + tableName.replace("/","").replace("\\","").replace(".","")
         # Write tableName to related job in job tracker
 
-        jobTracker = InterfaceHolder.JOB_TRACKER
-        jobTracker.addStagingTable(jobId,tableName)
-        validationDB = InterfaceHolder.VALIDATION
-        fields = validationDB.getFieldsByFile(fileType)
+        self.interfaces.jobDb.addStagingTable(jobId,tableName)
+        fields = self.interfaces.validationDb.getFieldsByFile(fileType)
 
         """ Might not need sequence for ORM
         # Create sequence to be used for primary key
@@ -53,34 +53,38 @@ class StagingTable(object):
         # Create empty dict for field names and values
         classFieldDict = {"__tablename__":tableName}
         # Add each column
-        for key in fields.iterkeys():
+        for key in fields:
             # Build column statement for this key
+            # Create cleaned version of key
+            newKey = FieldCleaner.cleanString(key)
             # Get correct type name
-            fieldTypeName = fields[key].field_type.name
-            if(fieldTypeName.lower() == "string"):
+            fieldTypeName = FieldCleaner.cleanString(fields[key].field_type.name)
+            if(fieldTypeName == "string"):
                 fieldTypeName = Text
-            elif(fieldTypeName.lower() == "int"):
+            elif(fieldTypeName == "int"):
                 fieldTypeName = Integer
-            elif(fieldTypeName.lower() == "decimal"):
+            elif(fieldTypeName == "decimal"):
                 fieldTypeName = Numeric
-            elif(fieldTypeName.lower() == "boolean"):
+            elif(fieldTypeName == "boolean"):
                 fieldTypeName = Boolean
+            elif(fieldTypeName == "long"):
+                fieldTypeName = BigInteger
             else:
                 raise ValueError("Bad field type")
             # Get extra parameters (primary key or not null)
             extraParam = ""
-            if(fields[key].field_type.description == "PRIMARY_KEY"):
-                classFieldDict[key.replace(" ","_")] = Column(fieldTypeName, primary_key=True)
+            if(FieldCleaner.cleanString(fields[key].field_type.description) == "primary_key"):
+                classFieldDict[newKey] = Column(fieldTypeName, primary_key=True)
                 primaryAssigned = True
             elif(fields[key].required):
-                classFieldDict[key.replace(" ","_")] = Column(fieldTypeName, nullable=False)
+                classFieldDict[newKey] = Column(fieldTypeName, nullable=False)
             else:
-                classFieldDict[key.replace(" ","_")] = Column(fieldTypeName)
+                classFieldDict[newKey] = Column(fieldTypeName)
 
 
         if(not primaryAssigned):
             # If no primary key assigned, add one based on table name
-            classFieldDict[tableName + "id"] = Column(Integer, primary_key = True)
+            classFieldDict["".join([tableName,"id"])] = Column(Integer, primary_key = True)
 
 
         # Create ORM class based on dict
@@ -148,8 +152,8 @@ class StagingTable(object):
                 attributes = self.getPublicMembers(recordOrm)
 
                 # For each field, add value to ORM object
-                for key in record.iterkeys():
-                    attr = key.replace(" ","_")
+                for key in record:
+                    attr = FieldCleaner.cleanString(key) #key.replace(" ","_")
                     setattr(recordOrm,attr,record[key])
 
                 self.interface.session.add(recordOrm)

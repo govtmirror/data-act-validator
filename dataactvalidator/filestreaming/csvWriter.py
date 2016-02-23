@@ -23,7 +23,7 @@ class CsvWriter(object):
 
         """
         self.rows = []
-        self.stream = smart_open.smart_open("s3://"+bucket+"/"+filename, 'wb',min_part_size=CsvWriter.BUFFER_SIZE)
+        self.stream = smart_open.smart_open("".join(["s3://",bucket,"/",filename]), 'wb',min_part_size=CsvWriter.BUFFER_SIZE)
         self.write(header)
 
 
@@ -52,8 +52,10 @@ class CsvWriter(object):
         Adds a row of csv into the S3 stream
 
         """
-
-        self.rows.append(dataList)
+        byteList = []
+        for data in dataList:
+            byteList.append(data.encode("UTF-8"))
+        self.rows.append(byteList)
         if(len(self.rows) > self.BATCH_SIZE):
             ioStream = io.BytesIO()
             csvFormatter = csv.writer(ioStream)

@@ -1,39 +1,28 @@
-
 import os
 import inspect
-
-import sys
-import flask
-from threading import Thread
-from flask import Flask, request, make_response, session, g, redirect, url_for, \
-     abort, render_template, flash ,session, Response, copy_current_request_context
 import json
-
-from dataactvalidator.validation_handlers.validationManager import ValidationManager
+from threading import Thread
+from flask import Flask, request, copy_current_request_context
 from dataactcore.utils.jsonResponse import JsonResponse
 from dataactcore.utils.statusCode import StatusCode
 from dataactcore.utils.responseException import ResponseException
-from csv import Error
-from dataactvalidator.interfaces.jobTrackerInterface import JobTrackerInterface
-from dataactvalidator.interfaces.errorInterface import ErrorInterface
-from dataactvalidator.interfaces.stagingInterface import StagingInterface
-from dataactvalidator.interfaces.validationInterface import ValidationInterface
 from dataactvalidator.validation_handlers.validationError import ValidationError
+from dataactvalidator.validation_handlers.validationManager import ValidationManager
 from dataactvalidator.interfaces.interfaceHolder import InterfaceHolder
 
 def runApp():
-    debugFlag = True
-
     # Create application
     app = Flask(__name__)
     app.config.from_object(__name__)
 
+    # Create interfaces and hold local copy to prevent them from being wiped
+    #InterfaceHolder.connect()
+    #jobDb = InterfaceHolder.JOB_TRACKER
+    #errorDb = InterfaceHolder.ERROR
+    #stagingDb = InterfaceHolder.STAGING
+    #validaitonDb = InterfaceHolder.VALIDATION
+
     validationManager = ValidationManager()
-    # Hold copy of interface objects to limit to a single session for each
-    jobTracker = InterfaceHolder.JOB_TRACKER
-    errorDb = InterfaceHolder.ERROR
-    stagingDb = InterfaceHolder.STAGING
-    validationDb = InterfaceHolder.VALIDATION
 
     @app.route("/",methods=["GET"])
     def testApp():
@@ -44,69 +33,49 @@ def runApp():
     @app.route("/validate_threaded/",methods=["POST"])
     def validate_threaded():
         """Starts the validation process on a new thread"""
-        def markJob(job,jobTracker,status) :
-            """helper function to mark status without throwing errors"""
-            try :
-                jobTracker.markStatus(jobId,status)
-            except Exception as e:
-               pass
-
         @copy_current_request_context
         def ThreadedFunction (arg) :
                 """The new thread"""
                 threadedManager = ValidationManager()
                 threadedManager.threadedValidateJob(arg)
 
+        try :
+            interfaces = InterfaceHolder()
+            jobTracker = interfaces.jobDb
+        except ResponseException as e:
+            open("errorLog","a").write(str(e) + "\n")
+            return JsonResponse.error(e,e.status,{"table":"cannot connect to job database"})
+        except Exception as e:
+            open("errorLog","a").write(str(e) + "\n")
+            exc = ResponseException(str(e),StatusCode.INTERNAL_ERROR,type(e))
+            return JsonResponse.error(exc,exc.status,{"table":"cannot connect to job database"})
+
         jobId = None
         manager = ValidationManager()
 
-        try :
-            jobTracker = InterfaceHolder.JOB_TRACKER
-        except ResponseException as e:
-            exc = ResponseException(e.message)
-            exc.wrappedException = e
-            exc.status = StatusCode.CLIENT_ERROR
-            return JsonResponse.error(exc,exc.status,{"table":"cannot connect to job database"})
-        except Exception as e:
-            exc = ResponseException(e.message)
-            exc.wrappedException = e
-            exc.status = StatusCode.INTERNAL_ERROR
-            return JsonResponse.error(exc,exc.status,{"table":"cannot connect to job database"})
-
         try:
-            jobId = manager.getJobID(flask.request)
+            jobId = manager.getJobID(request)
         except ResponseException as e:
-            exc = ResponseException(e.message)
-            exc.wrappedException = e
-            exc.status = StatusCode.CLIENT_ERROR
-            manager.markJob(jobId,jobTracker,"invalid")
-            errorHandler = InterfaceHolder.ERROR
-            errorHandler.writeFileError(jobId,manager.filename,ValidationError.unknownError)
-            return JsonResponse.error(exc,exc.status,{"table":""})
+            open("errorLog","a").write(str(e) + "\n")
+            manager.markJob(jobId,jobTracker,"invalid",interfaces.errorDb,manager.filename)
+            return JsonResponse.error(e,e.status,{"table":""})
         except Exception as e:
-            exc = ResponseException(e.message)
-            exc.wrappedException = e
-            exc.status = StatusCode.CLIENT_ERROR
-            manager.markJob(jobId,jobTracker,"invalid")
-            errorHandler = InterfaceHolder.ERROR
-            errorHandler.writeFileError(jobId,manager.filename,ValidationError.unknownError)
+            open("errorLog","a").write(str(e) + "\n")
+            exc = ResponseException(str(e),StatusCode.CLIENT_ERROR,type(e))
+            manager.markJob(jobId,jobTracker,"invalid",interfaces.errorDb,manager.filename)
             return JsonResponse.error(exc,exc.status,{"table":""})
 
         try:
-            manager.testJobID(jobId)
+            manager.testJobID(jobId,interfaces)
         except ResponseException as e:
-            exc = ResponseException(e.message)
-            exc.wrappedException = e
-            exc.status = StatusCode.CLIENT_ERROR
-            errorHandler = InterfaceHolder.ERROR
-            errorHandler.writeFileError(jobId,manager.filename,ValidationError.jobError)
-            return JsonResponse.error(exc,exc.status,{"table":""})
+            open("errorLog","a").write(str(e) + "\n")
+            # Job is not ready to run according to job tracker, do not change status of job in job tracker
+            interfaces.errorDb.writeFileError(jobId,manager.filename,ValidationError.jobError)
+            return JsonResponse.error(e,e.status,{"table":""})
         except Exception as e:
-            exc = ResponseException(e.message)
-            exc.wrappedException = e
-            exc.status = StatusCode.CLIENT_ERROR
-            errorHandler = InterfaceHolder.ERROR
-            errorHandler.writeFileError(jobId,manager.filename,ValidationError.jobError)
+            open("errorLog","a").write(str(e) + "\n")
+            exc = ResponseException(str(e),StatusCode.CLIENT_ERROR,type(e))
+            interfaces.errorDb.writeFileError(jobId,manager.filename,ValidationError.jobError)
             return JsonResponse.error(exc,exc.status,{"table":""})
 
         thread = Thread(target=ThreadedFunction, args= (jobId,))
@@ -114,11 +83,11 @@ def runApp():
         try :
             jobTracker.markStatus(jobId,"running")
         except Exception as e:
-            exc = ResponseException(e.message)
-            exc.wrappedException = e
-            exc.status = StatusCode.INTERNAL_ERROR
+            open("errorLog","a").write(str(e) + "\n")
+            exc = ResponseException(str(e),StatusCode.INTERNAL_ERROR,type(e))
             return JsonResponse.error(exc,exc.status,{"table":"could not start job"})
 
+        interfaces.close()
         thread.start()
 
         return JsonResponse.create(StatusCode.OK,{"table":"job"+str(jobId)})
@@ -126,15 +95,16 @@ def runApp():
     @app.route("/validate/",methods=["POST"])
     def validate():
         """Starts the validation process on the same threads"""
+        interfaces = InterfaceHolder() # Create sessions for this route
         try:
-            return validationManager.validateJob(request)
+            return validationManager.validateJob(request,interfaces)
         except Exception as e:
             # Something went wrong getting the flask request
-            open("errorLog","a").write(e.message)
-            exc = ResponseException("Internal exception")
-            exc.status = StatusCode.INTERNAL_ERROR
-            exc.wrappedException = e
+            open("errorLog","a").write(str(e) + "\n")
+            exc = ResponseException(str(e),StatusCode.INTERNAL_ERROR,type(e))
             return JsonResponse.error(exc,exc.status,{"table":""})
+        finally:
+            interfaces.close()
 
 
     def getAppConfiguration():

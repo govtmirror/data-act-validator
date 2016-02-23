@@ -4,8 +4,6 @@ import json
 import sys
 from dataactvalidator.filestreaming.schemaLoader import SchemaLoader
 from dataactvalidator.filestreaming.tasLoader import TASLoader
-from dataactcore.scripts.databaseSetup import runCommands
-from dataactcore.models.validationInterface import ValidationInterface
 from dataactvalidator.scripts.setupTASIndexs import setupTASIndexs
 
 
@@ -45,17 +43,17 @@ class ConfigureValidator(object):
             try :
                 SchemaLoader.loadFields("appropriations",path)
             except IOError as e:
-                print "Cant open file"
+                print("Cant open file")
             except Exception as e:
-                  print "Unexpected error:", sys.exc_info()[0]
+                  print("Unexpected error:", sys.exc_info()[0])
             path = raw_input("Enter the full file path for your rules (appropriationsRules.csv) :  " ).strip()
 
             try :
                 SchemaLoader.loadRules("appropriations",path)
             except IOError as e:
-                print "Cant open file"
+                print("Cant open file")
             except Exception as e:
-                  print "Unexpected error:", sys.exc_info()[0]
+                  print("Unexpected error:", sys.exc_info()[0])
     @staticmethod
     def promptForTAS():
         if(ConfigureValidator.questionPrompt("Would you like to add a new TAS File? (y/n) : ")):
@@ -65,9 +63,9 @@ class ConfigureValidator(object):
                 TASLoader.loadFields(path)
                 setupTASIndexs()
             except IOError as e:
-                print "Cant open file"
+                print("Cant open file")
             except Exception as e:
-                 print "Unexpected error:", sys.exc_info()[0]
+                 print("Unexpected error:", sys.exc_info()[0])
     @staticmethod
     def promptWebservice():
         """Promts user validator web service"""
@@ -84,7 +82,7 @@ class ConfigureValidator(object):
 
             json = ConfigureValidator.createJSON(port,traceMode,debugMode)
 
-            with open(ConfigureValidator.getDatacorePath()+"/validator_configuration.json", 'wb') as bucketFile:
+            with open("".join([ConfigureValidator.getDatacorePath(),"/validator_configuration.json"]), 'wb') as bucketFile:
                 bucketFile.write(json)
 
 if __name__ == '__main__':

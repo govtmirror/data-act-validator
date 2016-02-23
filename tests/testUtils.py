@@ -14,6 +14,8 @@ class TestUtils(object):
     UPLOAD_FILES = True # Upload new csv files to S3, can set to False to skip reuploading same files on subsequent runs
     USE_THREADS = False # If true, each route call launches a new thread
     BASE_URL = "http://127.0.0.1:80"
+    # Set test output
+    TEST_OUTPUT = "console"
     #BASE_URL = "http://52.90.92.100:80"
     JSON_HEADER = {"Content-Type": "application/json"}
 

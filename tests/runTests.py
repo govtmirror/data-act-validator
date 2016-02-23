@@ -14,9 +14,6 @@ import xmlrunner
 def runTests():
     runMany = False # True to run the test suite multiple times
     
-    # Setting output path for unittest junit style results
-    unittest.main(testRunner=xmlrunner.XMLTestRunner(output='test-reports'))
-    
     # Connect to databases
     BaseInterface.IS_FLASK = False # Tests are not running within a flask app
     interfaces = InterfaceHolder()
@@ -48,7 +45,11 @@ def runTests():
     #print(str(suite.countTestCases()) + " tests in suite")
 
     # Run tests and store results
+    if TestUtils.TEST_OUTPUT == "junitxml":
+        runner = xmlrunner.XMLTestRunner(output='test-reports')
+    else:
         runner = unittest.TextTestRunner(verbosity=2)
+
     if(runMany):
         for i in range(0,100):
             result = runner.run(suite)
@@ -77,6 +78,7 @@ if __name__ == '__main__':
     url = os.getenv('VALIDATOR_NAME', "NOT SET")
     if(url != "NOT SET") :
         TestUtils.BASE_URL = "http://validator"
+        TestUtils.TEST_OUTPUT = "junitxml"
     runTests()
     #cProfile.run("runTests()","stats")
     #stats = pstats.Stats("stats")

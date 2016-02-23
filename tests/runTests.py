@@ -4,14 +4,16 @@ from dataactvalidator.interfaces.interfaceHolder import InterfaceHolder
 from jobTests import JobTests
 from validatorTests import ValidatorTests
 from fileTypeTests import FileTypeTests
+from testUtils import TestUtils
 import cProfile
 import pstats
 import sys
 import os
 import xmlrunner
+
 def runTests():
     runMany = False # True to run the test suite multiple times
-
+    
     # Setting output path for unittest junit style results
     unittest.main(testRunner=xmlrunner.XMLTestRunner(output='test-reports'))
     
@@ -46,7 +48,7 @@ def runTests():
     #print(str(suite.countTestCases()) + " tests in suite")
 
     # Run tests and store results
-    runner = unittest.TextTestRunner(verbosity=2)
+        runner = unittest.TextTestRunner(verbosity=2)
     if(runMany):
         for i in range(0,100):
             result = runner.run(suite)
@@ -71,10 +73,10 @@ def runTests():
 if __name__ == '__main__':
 
     if(len(sys.argv) == 2) :
-        JobTests.BASE_URL = sys.argv[1] + ":8080"
+        TestUtils.BASE_URL = sys.argv[1] + ":8080"
     url = os.getenv('VALIDATOR_NAME', "NOT SET")
     if(url != "NOT SET") :
-        JobTests.BASE_URL = "http://validator"
+        TestUtils.BASE_URL = "http://validator"
     runTests()
     #cProfile.run("runTests()","stats")
     #stats = pstats.Stats("stats")

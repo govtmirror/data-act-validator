@@ -1,7 +1,7 @@
 from __future__ import print_function
 from dataactvalidator.models.validationModels import TASLookup
 from dataactvalidator.filestreaming.schemaLoader import SchemaLoader
-from dataactvalidator.scripts.tasSetup import loadTAS
+from dataactvalidator.scripts.loadTas import loadTas
 from baseTest import BaseTest
 import unittest
 
@@ -73,7 +73,7 @@ class FileTypeTests(BaseTest):
         if (interfaces.validationDb.session.query(TASLookup).count() == 0
                 or force_tas_load):
             # TAS table is empty, load it
-            loadTAS("all_tas_betc.csv")
+            loadTas(tasFile="all_tas_betc.csv", dropIdx=False)
 
     def test_approp_valid(self):
         """Test valid job."""
@@ -85,7 +85,7 @@ class FileTypeTests(BaseTest):
         """Test mixed job with some rows failing."""
         jobId = self.jobIdDict["mixed"]
         self.passed = self.run_test(
-            jobId, 200, "finished", 5510, 4, "complete", 57, True)
+            jobId, 200, "finished", 4433, 4, "complete", 45, True)
 
     def test_program_valid(self):
         """Test valid job."""
@@ -97,19 +97,19 @@ class FileTypeTests(BaseTest):
         """Test mixed job with some rows failing."""
         jobId = self.jobIdDict["programMixed"]
         self.passed = self.run_test(
-            jobId, 200, "finished", 7712, 4, "complete", 77, True)
+            jobId, 200, "finished", 7787, 4, "complete", 78, True)
 
     def test_award_fin_valid(self):
         """Test valid job."""
         jobId = self.jobIdDict["awardFinValid"]
         self.passed = self.run_test(
-            jobId, 200, "finished", 52, 10, "complete", 0, False)
+            jobId, 200, "finished", 52, 11, "complete", 0, False)
 
     def test_award_fin_mixed(self):
         """Test mixed job with some rows failing."""
         jobId = self.jobIdDict["awardFinMixed"]
         self.passed = self.run_test(
-            jobId, 200, "finished", 7480, 7, "complete", 76, True)
+            jobId, 200, "finished", 5910, 7, "complete", 60, True)
 
     def test_award_valid(self):
         """Test valid job."""
@@ -121,7 +121,7 @@ class FileTypeTests(BaseTest):
         """Test mixed job with some rows failing."""
         jobId = self.jobIdDict["awardMixed"]
         self.passed = self.run_test(
-            jobId, 200, "finished", 3185, 7, "complete", 44, True)
+            jobId, 200, "finished", 2168, 7, "complete", 33, True)
 
 if __name__ == '__main__':
     unittest.main()
